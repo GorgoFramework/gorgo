@@ -58,7 +58,7 @@ func (p *SqlPlugin) Initialize(container *container.Container, config map[string
 	}
 
 	p.pool = pool
-	container.Register("db", pool)
+	container.Register("sql", pool)
 
 	return nil
 }

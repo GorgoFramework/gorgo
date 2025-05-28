@@ -10,8 +10,7 @@ func main() {
 	app := gorgo.New()
 
 	app.Get("/", func(ctx *gorgo.Context) error {
-		ctx.JSON(gorgo.Map{"message": "Hello, World!", "Demo": 1})
-		return nil
+		return ctx.JSON(gorgo.Map{"message": "Hello, World!", "Demo": 1})
 	})
 
 	if err := app.Run(); err != nil {

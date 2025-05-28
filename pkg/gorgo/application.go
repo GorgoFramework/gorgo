@@ -58,12 +58,13 @@ func (a *Application) loadConfig() {
 	a.config = Config{}
 
 	a.config.App.Name = "Gorgo Framework"
-	a.config.App.Version = "0.0.1"
+	a.config.App.Version = "0.0.3"
 	a.config.App.Debug = true
 
 	a.config.Server.Host = "localhost"
 	a.config.Server.Port = 8080
 
+	// TODO: Add custom config path
 	if _, err := os.Stat("config/app.toml"); err == nil {
 		if _, err := toml.DecodeFile("config/app.toml", &a.config); err != nil {
 			log.Printf("Warning: failed to load config/app.toml: %v", err)
@@ -81,10 +82,9 @@ func (a *Application) printBanner() {
  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ 
 
 %s v%s
-Plugins loaded: %d
 Powered by Gorgo Framework
 `
-	fmt.Printf(banner, a.config.App.Name, a.config.App.Version, len(a.plugins))
+	fmt.Printf(banner, a.config.App.Name, a.config.App.Version)
 }
 
 func (a *Application) AddPlugin(plugin Plugin) *Application {
