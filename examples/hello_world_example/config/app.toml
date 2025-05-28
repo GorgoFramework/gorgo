@@ -1,0 +1,9 @@
+[app]
+name = "hello_world_example"
+version = "0.0.1"
+debug = true
+
+[server]
+host = "localhost"
+port = 8080
+
