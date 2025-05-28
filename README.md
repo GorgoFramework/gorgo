@@ -159,6 +159,7 @@ In the `examples/` directory you'll find various usage examples:
 ## Documentation
 
 - [URL Parameters](docs/url-parameters.md) - detailed guide for working with URL parameters
+- [SQL Plugin](docs/sql-plugin.md) - PostgreSQL database integration guide
 
 ## License
 

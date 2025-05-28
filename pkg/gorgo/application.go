@@ -14,7 +14,7 @@ import (
 )
 
 type HandlerFunc func(ctx *Context) error
-type Map map[string]interface{}
+type Map map[string]any
 
 type Application struct {
 	container *container.Container
@@ -137,10 +137,8 @@ func (a *Application) handleRequest(ctx *fasthttp.RequestCtx) {
 	}
 
 	// Set URL parameters in context
-	if params != nil {
-		for key, value := range params {
-			gorgoCtx.SetParam(key, value)
-		}
+	for key, value := range params {
+		gorgoCtx.SetParam(key, value)
 	}
 
 	if err := handler(gorgoCtx); err != nil {

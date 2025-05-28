@@ -48,7 +48,7 @@ func TestRouterExactMatch(t *testing.T) {
 		t.Error("Expected to find handler, got nil")
 	}
 
-	if params != nil && len(params) > 0 {
+	if len(params) > 0 {
 		t.Error("Expected no parameters for exact match, got some")
 	}
 }
