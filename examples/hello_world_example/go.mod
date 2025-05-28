@@ -2,7 +2,7 @@ module gorgo_hello_world
 
 go 1.23.3
 
-require github.com/GorgoFramework/gorgo v0.0.0-20250528140849-c4b3823d9b38
+require github.com/GorgoFramework/gorgo v0.0.1
 
 require (
 	github.com/BurntSushi/toml v1.5.0 // indirect

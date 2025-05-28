@@ -2,6 +2,8 @@ github.com/BurntSushi/toml v1.5.0 h1:W5quZX/G/csjUnuI8SUYlsHs9M38FC7znL0lIO+DvMg
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/GorgoFramework/gorgo v0.0.0-20250528140849-c4b3823d9b38 h1:XQcoNr0vm5A5Mk9H+fkMeYwkQ9BFjtZLckJiZuS+36g=
 github.com/GorgoFramework/gorgo v0.0.0-20250528140849-c4b3823d9b38/go.mod h1:rVf6cxt8HdgiEK70zLFin+5Eni5N6FaSJR6xoP51TVo=
+github.com/GorgoFramework/gorgo v0.0.1 h1:yhmux5d67ipE+SMya6sdRg5Mt+e2dUkgDTwCEijJTmc=
+github.com/GorgoFramework/gorgo v0.0.1/go.mod h1:rVf6cxt8HdgiEK70zLFin+5Eni5N6FaSJR6xoP51TVo=
 github.com/andybalholm/brotli v1.1.1 h1:PR2pgnyFznKEugtsUo0xLdDop5SKXd5Qf5ysW+7XdTA=
 github.com/andybalholm/brotli v1.1.1/go.mod h1:05ib4cKhjx3OQYUY22hTVd34Bc8upXjOLL2rKwwZBoA=
 github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zttxdo=
