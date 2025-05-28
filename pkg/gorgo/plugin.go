@@ -1,12 +1,9 @@
 package gorgo
 
-type AppContext interface {
-	AddPlugin(p Plugin)
-}
+import "github.com/GorgoFramework/gorgo/internal/container"
 
 type Plugin interface {
 	Name() string
-	Configure(cfg map[string]interface{}) error
-	Init(app AppContext) error
+	Initialize(container *container.Container, config map[string]interface{}) error
 	Shutdown() error
 }
