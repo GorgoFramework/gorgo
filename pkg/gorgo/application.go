@@ -129,11 +129,18 @@ func (a *Application) handleRequest(ctx *fasthttp.RequestCtx) {
 	method := string(ctx.Method())
 	path := string(ctx.Path())
 
-	handler := a.router.FindHandler(method, path)
+	handler, params := a.router.FindHandler(method, path)
 	if handler == nil {
 		ctx.SetStatusCode(404)
 		ctx.SetBodyString("Not Found")
 		return
+	}
+
+	// Set URL parameters in context
+	if params != nil {
+		for key, value := range params {
+			gorgoCtx.SetParam(key, value)
+		}
 	}
 
 	if err := handler(gorgoCtx); err != nil {
