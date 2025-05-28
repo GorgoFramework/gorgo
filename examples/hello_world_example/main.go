@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/GorgoFramework/gorgo/pkg/gorgo"
 )
 
@@ -12,5 +14,7 @@ func main() {
 		return nil
 	})
 
-	app.Run()
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -92,7 +92,7 @@ func (a *Application) AddPlugin(plugin Plugin) *Application {
 	return a
 }
 
-func (a *Application) Run() (*Application, error) {
+func (a *Application) Run() error {
 	for name, plugin := range a.plugins {
 		pluginConfig := a.config.Plugins[name]
 		if pluginConfig == nil {
@@ -100,7 +100,7 @@ func (a *Application) Run() (*Application, error) {
 		}
 
 		if err := plugin.Initialize(a.container, pluginConfig); err != nil {
-			return nil, fmt.Errorf("failed to initialize plugin %s: %v", name, err)
+			return fmt.Errorf("failed to initialize plugin %s: %v", name, err)
 		}
 
 		log.Printf("Plugin %s initialized successfully", name)
@@ -120,7 +120,7 @@ func (a *Application) Run() (*Application, error) {
 
 	a.waitForShutdown()
 
-	return a, nil
+	return nil
 }
 
 func (a *Application) handleRequest(ctx *fasthttp.RequestCtx) {
