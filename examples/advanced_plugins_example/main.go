@@ -76,7 +76,7 @@ func main() {
 		})
 
 		if err != nil {
-			return ctx.Status(500).JSON(gorgo.Map{"error": err.Error()})
+			return ctx.Status(gorgo.InternalServerErrorStatus).JSON(gorgo.Map{"error": err.Error()})
 		}
 
 		return ctx.JSON(gorgo.Map{"message": "Event triggered successfully"})
@@ -94,7 +94,7 @@ func main() {
 
 		err := app.HotReloadPlugin(pluginName, newConfig)
 		if err != nil {
-			return ctx.Status(400).JSON(gorgo.Map{"error": err.Error()})
+			return ctx.Status(gorgo.BadRequestStatus).JSON(gorgo.Map{"error": err.Error()})
 		}
 
 		return ctx.JSON(gorgo.Map{"message": "Plugin reloaded successfully"})
@@ -161,7 +161,7 @@ func createUserHandler(ctx *gorgo.Context) error {
 	}
 
 	if err := ctx.BindJSON(&user); err != nil {
-		return ctx.Status(400).JSON(gorgo.Map{"error": "Invalid JSON"})
+		return ctx.Status(gorgo.BadRequestStatus).JSON(gorgo.Map{"error": "Invalid JSON"})
 	}
 
 	// Simulate user creation
@@ -171,7 +171,7 @@ func createUserHandler(ctx *gorgo.Context) error {
 		"email": user.Email,
 	}
 
-	return ctx.Status(201).JSON(gorgo.Map{
+	return ctx.Status(gorgo.CreatedStatus).JSON(gorgo.Map{
 		"message": "User created successfully",
 		"user":    newUser,
 	})

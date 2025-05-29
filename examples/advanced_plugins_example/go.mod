@@ -2,7 +2,7 @@ module advanced_plugins_example
 
 go 1.23.3
 
-require github.com/GorgoFramework/gorgo v0.1.0
+require github.com/GorgoFramework/gorgo v0.1.1
 
 require (
 	github.com/BurntSushi/toml v1.5.0 // indirect
