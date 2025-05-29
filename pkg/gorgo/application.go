@@ -17,11 +17,12 @@ type HandlerFunc func(ctx *Context) error
 type Map map[string]any
 
 type Application struct {
-	container *container.Container
-	plugins   map[string]Plugin
-	config    Config
-	server    *fasthttp.Server
-	router    *Router
+	container       *container.Container
+	pluginManager   *PluginManager
+	config          Config
+	server          *fasthttp.Server
+	router          *Router
+	middlewareChain *MiddlewareChain
 }
 
 type Config struct {
@@ -41,34 +42,43 @@ type Config struct {
 
 func New() *Application {
 	app := &Application{
-		container: container.NewContainer(),
-		plugins:   make(map[string]Plugin),
-		server:    &fasthttp.Server{},
-		router:    NewRouter(),
+		container:       container.NewContainer(),
+		config:          Config{},
+		router:          NewRouter(),
+		middlewareChain: NewMiddlewareChain(),
 	}
 
-	app.loadConfig()
+	app.pluginManager = NewPluginManager(app.container)
 
+	app.loadConfig()
+	app.setupDefaultMiddleware()
 	app.printBanner()
 
 	return app
 }
 
 func (a *Application) loadConfig() {
-	a.config = Config{}
-
-	a.config.App.Name = "Gorgo Framework"
-	a.config.App.Version = "0.0.3"
-	a.config.App.Debug = true
-
+	// Set defaults
+	a.config.App.Name = "Gorgo Application"
+	a.config.App.Version = "1.0.0"
+	a.config.App.Debug = false
 	a.config.Server.Host = "localhost"
-	a.config.Server.Port = 8080
+	a.config.Server.Port = 3000
 
 	// TODO: Add custom config path
 	if _, err := os.Stat("config/app.toml"); err == nil {
 		if _, err := toml.DecodeFile("config/app.toml", &a.config); err != nil {
 			log.Printf("Warning: failed to load config/app.toml: %v", err)
 		}
+	}
+}
+
+func (a *Application) setupDefaultMiddleware() {
+	// Add basic middleware
+	a.middlewareChain.Add(RecoveryMiddleware())
+
+	if a.config.App.Debug {
+		a.middlewareChain.Add(LoggerMiddleware())
 	}
 }
 
@@ -87,24 +97,86 @@ Powered by Gorgo Framework
 	fmt.Printf(banner, a.config.App.Name, a.config.App.Version)
 }
 
+// Methods for working with plugins
 func (a *Application) AddPlugin(plugin Plugin) *Application {
-	a.plugins[plugin.Name()] = plugin
+	if err := a.pluginManager.RegisterPlugin(plugin); err != nil {
+		log.Printf("Failed to register plugin: %v", err)
+	}
+	return a
+}
+
+func (a *Application) GetPlugin(name string) (Plugin, bool) {
+	return a.pluginManager.GetPlugin(name)
+}
+
+func (a *Application) GetEventBus() *EventBus {
+	return a.pluginManager.GetEventBus()
+}
+
+func (a *Application) HotReloadPlugin(name string, newConfig map[string]interface{}) error {
+	return a.pluginManager.HotReloadPlugin(name, newConfig)
+}
+
+// Methods for working with middleware
+func (a *Application) Use(middleware MiddlewareFunc) *Application {
+	a.middlewareChain.Add(middleware)
+	return a
+}
+
+func (a *Application) UseMiddleware(middlewares ...MiddlewareFunc) *Application {
+	for _, middleware := range middlewares {
+		a.middlewareChain.Add(middleware)
+	}
+	return a
+}
+
+// CORS methods
+func (a *Application) EnableCORS(options ...CORSOptions) *Application {
+	var corsOptions CORSOptions
+	if len(options) > 0 {
+		corsOptions = options[0]
+	} else {
+		corsOptions = DefaultCORSOptions()
+	}
+
+	a.middlewareChain.Add(CORSMiddleware(corsOptions))
+	return a
+}
+
+// Rate limiting methods
+func (a *Application) EnableRateLimit(options RateLimitOptions) *Application {
+	a.middlewareChain.Add(RateLimitMiddleware(options))
+	return a
+}
+
+// Authentication methods
+func (a *Application) EnableAuth(authFunc func(ctx *Context) (interface{}, error)) *Application {
+	a.middlewareChain.Add(AuthMiddleware(authFunc))
 	return a
 }
 
 func (a *Application) Run() error {
-	for name, plugin := range a.plugins {
-		pluginConfig := a.config.Plugins[name]
-		if pluginConfig == nil {
-			pluginConfig = make(map[string]interface{})
-		}
-
-		if err := plugin.Initialize(a.container, pluginConfig); err != nil {
-			return fmt.Errorf("failed to initialize plugin %s: %v", name, err)
-		}
-
-		log.Printf("Plugin %s initialized successfully", name)
+	// Initialize plugins
+	if err := a.pluginManager.InitializePlugins(a.config.Plugins); err != nil {
+		return fmt.Errorf("failed to initialize plugins: %v", err)
 	}
+
+	// Add middleware from plugins
+	pluginMiddleware := a.pluginManager.GetMiddleware()
+	for _, middleware := range pluginMiddleware {
+		a.middlewareChain.Add(middleware)
+	}
+
+	// Start plugins
+	ctx := context.Background()
+	if err := a.pluginManager.StartPlugins(ctx); err != nil {
+		return fmt.Errorf("failed to start plugins: %v", err)
+	}
+
+	// Publish application starting event
+	a.pluginManager.GetEventBus().Publish(ctx, "app.starting", map[string]interface{}{
+		"config": a.config,
+	})
 
 	a.server = &fasthttp.Server{
 		Handler: a.handleRequest,
@@ -113,6 +185,12 @@ func (a *Application) Run() error {
 	go func() {
 		addr := fmt.Sprintf("%s:%d", a.config.Server.Host, a.config.Server.Port)
 		log.Printf("Server starting on %s", addr)
+
+		// Publish server started event
+		a.pluginManager.GetEventBus().Publish(ctx, "server.started", map[string]interface{}{
+			"address": addr,
+		})
+
 		if err := a.server.ListenAndServe(addr); err != nil {
 			log.Fatalf("Server failed to start: %v", err)
 		}
@@ -124,15 +202,28 @@ func (a *Application) Run() error {
 }
 
 func (a *Application) handleRequest(ctx *fasthttp.RequestCtx) {
-	gorgoCtx := NewContext(ctx, a.container, a.plugins)
+	gorgoCtx := NewContext(ctx, a.container, a.pluginManager.plugins)
 
 	method := string(ctx.Method())
 	path := string(ctx.Path())
+
+	// Publish incoming request event
+	a.pluginManager.GetEventBus().Publish(context.Background(), "request.incoming", map[string]interface{}{
+		"method": method,
+		"path":   path,
+		"ip":     gorgoCtx.ClientIP(),
+	})
 
 	handler, params := a.router.FindHandler(method, path)
 	if handler == nil {
 		ctx.SetStatusCode(404)
 		ctx.SetBodyString("Not Found")
+
+		// Publish 404 event
+		a.pluginManager.GetEventBus().Publish(context.Background(), "request.not_found", map[string]interface{}{
+			"method": method,
+			"path":   path,
+		})
 		return
 	}
 
@@ -141,12 +232,29 @@ func (a *Application) handleRequest(ctx *fasthttp.RequestCtx) {
 		gorgoCtx.SetParam(key, value)
 	}
 
-	if err := handler(gorgoCtx); err != nil {
+	// Apply middleware chain
+	finalHandler := a.middlewareChain.Execute(handler)
+
+	if err := finalHandler(gorgoCtx); err != nil {
 		log.Printf("Handler error: %v", err)
 		ctx.SetStatusCode(500)
 		ctx.SetBodyString("Internal Server Error")
+
+		// Publish error event
+		a.pluginManager.GetEventBus().Publish(context.Background(), "request.error", map[string]interface{}{
+			"method": method,
+			"path":   path,
+			"error":  err.Error(),
+		})
 		return
 	}
+
+	// Publish successful request event
+	a.pluginManager.GetEventBus().Publish(context.Background(), "request.completed", map[string]interface{}{
+		"method": method,
+		"path":   path,
+		"status": ctx.Response.StatusCode(),
+	})
 }
 
 func (a *Application) waitForShutdown() {
@@ -156,37 +264,99 @@ func (a *Application) waitForShutdown() {
 
 	log.Println("Shutting down server...")
 
-	if len(a.plugins) > 0 {
-		for name, plugin := range a.plugins {
-			if err := plugin.Shutdown(); err != nil {
-				log.Printf("Error shutting down plugin %s: %v", name, err)
-			}
-		}
+	ctx := context.Background()
+
+	// Publish application stopping event
+	a.pluginManager.GetEventBus().Publish(ctx, "app.stopping", map[string]interface{}{})
+
+	// Stop plugins
+	if err := a.pluginManager.StopPlugins(ctx); err != nil {
+		log.Printf("Error stopping plugins: %v", err)
 	}
 
-	if err := a.server.ShutdownWithContext(context.Background()); err != nil {
+	if err := a.server.ShutdownWithContext(ctx); err != nil {
 		log.Printf("Error shutting down server: %v", err)
 	}
 
 	log.Println("Server stopped")
 }
 
-func (a *Application) Get(path string, handler HandlerFunc) {
-	a.router.AddRoute("GET", path, handler)
+// HTTP methods with route-level middleware support
+func (a *Application) Get(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	finalHandler := a.applyRouteMiddleware(handler, middleware...)
+	a.router.AddRoute("GET", path, finalHandler)
 }
 
-func (a *Application) Post(path string, handler HandlerFunc) {
-	a.router.AddRoute("POST", path, handler)
+func (a *Application) Post(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	finalHandler := a.applyRouteMiddleware(handler, middleware...)
+	a.router.AddRoute("POST", path, finalHandler)
 }
 
-func (a *Application) Put(path string, handler HandlerFunc) {
-	a.router.AddRoute("PUT", path, handler)
+func (a *Application) Put(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	finalHandler := a.applyRouteMiddleware(handler, middleware...)
+	a.router.AddRoute("PUT", path, finalHandler)
 }
 
-func (a *Application) Delete(path string, handler HandlerFunc) {
-	a.router.AddRoute("DELETE", path, handler)
+func (a *Application) Delete(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	finalHandler := a.applyRouteMiddleware(handler, middleware...)
+	a.router.AddRoute("DELETE", path, finalHandler)
 }
 
-func (a *Application) Patch(path string, handler HandlerFunc) {
-	a.router.AddRoute("PATCH", path, handler)
+func (a *Application) Patch(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	finalHandler := a.applyRouteMiddleware(handler, middleware...)
+	a.router.AddRoute("PATCH", path, finalHandler)
+}
+
+func (a *Application) applyRouteMiddleware(handler HandlerFunc, middleware ...MiddlewareFunc) HandlerFunc {
+	if len(middleware) == 0 {
+		return handler
+	}
+
+	chain := NewMiddlewareChain(middleware...)
+	return chain.Execute(handler)
+}
+
+// Route grouping
+type RouteGroup struct {
+	app        *Application
+	prefix     string
+	middleware []MiddlewareFunc
+}
+
+func (a *Application) Group(prefix string, middleware ...MiddlewareFunc) *RouteGroup {
+	return &RouteGroup{
+		app:        a,
+		prefix:     prefix,
+		middleware: middleware,
+	}
+}
+
+func (rg *RouteGroup) Get(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	fullPath := rg.prefix + path
+	allMiddleware := append(rg.middleware, middleware...)
+	rg.app.Get(fullPath, handler, allMiddleware...)
+}
+
+func (rg *RouteGroup) Post(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	fullPath := rg.prefix + path
+	allMiddleware := append(rg.middleware, middleware...)
+	rg.app.Post(fullPath, handler, allMiddleware...)
+}
+
+func (rg *RouteGroup) Put(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	fullPath := rg.prefix + path
+	allMiddleware := append(rg.middleware, middleware...)
+	rg.app.Put(fullPath, handler, allMiddleware...)
+}
+
+func (rg *RouteGroup) Delete(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	fullPath := rg.prefix + path
+	allMiddleware := append(rg.middleware, middleware...)
+	rg.app.Delete(fullPath, handler, allMiddleware...)
+}
+
+func (rg *RouteGroup) Patch(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	fullPath := rg.prefix + path
+	allMiddleware := append(rg.middleware, middleware...)
+	rg.app.Patch(fullPath, handler, allMiddleware...)
 }

@@ -6,9 +6,12 @@ A modern and fast web framework for Go, built on top of FastHTTP.
 
 - 🚀 **High Performance** - built on FastHTTP
 - 🛣️ **Flexible Routing** - URL parameter support
-- 🔌 **Plugin System** - easily extensible architecture
+- 🔌 **Enhanced Plugin System** - powerful and extensible architecture
 - 🏗️ **Dependency Injection** - built-in dependency container
 - 📝 **Simple API** - intuitive interface
+- 🎯 **Middleware Support** - comprehensive middleware system
+- 📊 **Event System** - pub/sub event bus
+- 🔄 **Hot Reload** - plugin hot reloading support
 
 ## Quick Start
 
@@ -39,6 +42,56 @@ func main() {
     if err := app.Run(); err != nil {
         log.Fatal(err)
     }
+}
+```
+
+## Enhanced Plugin System
+
+Gorgo now features a powerful plugin system with:
+
+- **Lifecycle Hooks** - OnBeforeInit, OnAfterInit, OnBeforeStart, etc.
+- **Event Bus** - Subscribe to and publish events
+- **Middleware Providers** - Plugins can provide middleware
+- **Service Registration** - Automatic dependency injection
+- **Hot Reloading** - Runtime configuration updates
+- **Priority & Dependencies** - Controlled loading order
+
+### Plugin Example
+
+```go
+package main
+
+import (
+    "log"
+    "github.com/GorgoFramework/gorgo/pkg/gorgo"
+    "github.com/GorgoFramework/gorgo/plugins/sql"
+    "github.com/GorgoFramework/gorgo/plugins/monitoring"
+)
+
+func main() {
+    app := gorgo.New()
+
+    // Add plugins
+    app.AddPlugin(sql.NewSqlPlugin()).
+        AddPlugin(monitoring.NewMonitoringPlugin())
+
+    // Enable built-in middleware
+    app.EnableCORS().
+        EnableRateLimit(gorgo.RateLimitOptions{
+            RequestsPerMinute: 100,
+            BurstSize:         10,
+        })
+
+    app.Get("/", func(ctx *gorgo.Context) error {
+        // Access plugin services
+        if db, exists := ctx.GetService("sql"); exists {
+            // Use database
+        }
+        
+        return ctx.JSON(gorgo.Map{"message": "Hello with plugins!"})
+    })
+
+    log.Fatal(app.Run())
 }
 ```
 
@@ -82,6 +135,49 @@ app.Delete("/users/:id", deleteUserHandler)
 app.Patch("/users/:id", patchUserHandler)
 ```
 
+## Middleware System
+
+### Built-in Middleware
+
+```go
+// Enable CORS
+app.EnableCORS(gorgo.CORSOptions{
+    AllowOrigin: "*",
+    AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
+})
+
+// Rate limiting
+app.EnableRateLimit(gorgo.RateLimitOptions{
+    RequestsPerMinute: 100,
+    BurstSize: 10,
+})
+
+// Custom middleware
+app.Use(gorgo.LoggerMiddleware())
+app.Use(gorgo.RecoveryMiddleware())
+```
+
+### Route-specific Middleware
+
+```go
+app.Get("/protected", protectedHandler, 
+    gorgo.AuthMiddleware(authFunc),
+    customMiddleware(),
+)
+```
+
+### Route Groups
+
+```go
+api := app.Group("/api/v1", 
+    gorgo.AuthMiddleware(authFunc),
+    gorgo.LoggerMiddleware(),
+)
+
+api.Get("/users", getUsersHandler)
+api.Post("/users", createUserHandler)
+```
+
 ## Responses
 
 ### JSON Response
@@ -95,34 +191,58 @@ app.Get("/api/data", func(ctx *gorgo.Context) error {
 })
 ```
 
-### Text Response
+### Other Response Types
 
 ```go
-app.Get("/text", func(ctx *gorgo.Context) error {
-    return ctx.String("Hello, World!")
+// Text response
+return ctx.String("Hello, World!")
+
+// HTML response
+return ctx.HTML("<h1>Hello, World!</h1>")
+
+// Status with chaining
+return ctx.Status(201).JSON(gorgo.Map{"created": true})
+
+// Headers
+return ctx.Header("X-Custom", "value").JSON(data)
+```
+
+## Event System
+
+```go
+// Subscribe to events in plugins
+func (p *MyPlugin) GetEventSubscriptions() map[string]gorgo.EventHandler {
+    return map[string]gorgo.EventHandler{
+        "request.completed": p.onRequestCompleted,
+        "custom.event": p.onCustomEvent,
+    }
+}
+
+// Publish events
+app.Get("/trigger", func(ctx *gorgo.Context) error {
+    eventBus := app.GetEventBus()
+    return eventBus.Publish(ctx.FastHTTP(), "custom.event", gorgo.Map{
+        "user_id": ctx.Query("user_id"),
+    })
 })
 ```
 
-## Plugin System
+## Built-in Plugins
 
-Gorgo supports modular architecture through a plugin system:
+### SQL Plugin
+- PostgreSQL connection pooling
+- Transaction middleware
+- Hot reloadable configuration
 
-```go
-import "github.com/GorgoFramework/gorgo/plugins/sql"
+### Redis Plugin  
+- Caching middleware
+- Session management
+- Connection pooling
 
-func main() {
-    sqlPlugin := sql.NewSqlPlugin()
-    app := gorgo.New().AddPlugin(sqlPlugin)
-    
-    app.Get("/users", func(ctx *gorgo.Context) error {
-        db, _ := ctx.GetService("sql")
-        // Database operations
-        return ctx.JSON(gorgo.Map{"users": []string{}})
-    })
-    
-    app.Run()
-}
-```
+### Monitoring Plugin
+- Request metrics collection
+- Performance monitoring
+- Health check endpoints
 
 ## Configuration
 
@@ -144,6 +264,12 @@ port = 5432
 user = "postgres"
 password = "password"
 db = "myapp"
+max_conns = 25
+
+[plugins.monitoring]
+enabled = true
+report_interval = 60
+log_requests = true
 ```
 
 ## Examples
@@ -155,11 +281,13 @@ In the `examples/` directory you'll find various usage examples:
 - `params_example/` - extended parameter examples
 - `advanced_params_example/` - advanced parameter handling
 - `postgres_example/` - PostgreSQL integration
+- `advanced_plugins_example/` - enhanced plugin system demo
 
 ## Documentation
 
 - [URL Parameters](docs/url-parameters.md) - detailed guide for working with URL parameters
 - [SQL Plugin](docs/sql-plugin.md) - PostgreSQL database integration guide
+- [Enhanced Plugin System](docs/enhanced-plugin-system.md) - comprehensive plugin development guide
 
 ## License
 
